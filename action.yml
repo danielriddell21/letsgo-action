@@ -9,12 +9,12 @@ branding:
 inputs:
   version:
     description: >-
-      The letsgo release to install, as a tag such as v0.3.0, or "latest".
+      The letsgo release to install, as a tag such as v0.5.0, or "latest".
       Pinned by default: letsgo decides the archive layout and the linker
       flags, so it is a build input, and a release built by a version you did
       not choose is a release you cannot reproduce.
     required: false
-    default: v0.3.0
+    default: v0.5.0
 
   command:
     description: >-
@@ -87,7 +87,7 @@ runs:
         set -euo pipefail
 
         if [[ ! "$LETSGO_VERSION" =~ ^(latest|v[0-9]+\.[0-9]+\.[0-9]+([-+].*)?)$ ]]; then
-          echo "::error::version must be \"latest\" or a tag such as v0.3.0, got \"$LETSGO_VERSION\"" >&2
+          echo "::error::version must be \"latest\" or a tag such as v0.5.0, got \"$LETSGO_VERSION\"" >&2
           exit 1
         fi
 
