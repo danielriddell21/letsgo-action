@@ -68,7 +68,7 @@ changelog needs history the runner does not have.
 
 | Input | Default | Description |
 |---|---|---|
-| `version` | `v0.3.0` | The letsgo release to install, or `latest`. |
+| `version` | `v0.5.0` | The letsgo release to install, or `latest`. |
 | `command` | `release` | `release`, `plan`, `build`, `verify`, `diff`, `tag`, `yank`, or empty to install only. |
 | `args` | `""` | Extra arguments, split on whitespace. |
 | `working-directory` | `.` | Where to run. |
