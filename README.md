@@ -68,7 +68,7 @@ changelog needs history the runner does not have.
 
 | Input | Default | Description |
 |---|---|---|
-| `version` | `v0.5.0` | The letsgo release to install, or `latest`. |
+| `version` | `latest` | The letsgo release to install, or a tag such as `v0.8.0`. |
 | `command` | `release` | `release`, `plan`, `build`, `verify`, `diff`, `tag`, `yank`, or empty to install only. |
 | `args` | `""` | Extra arguments, split on whitespace. |
 | `working-directory` | `.` | Where to run. |
@@ -89,14 +89,26 @@ changelog needs history the runner does not have.
       - run: echo "published ${{ steps.release.outputs.release-url }}"
 ```
 
-## Why the letsgo version is pinned
+## Pinning the letsgo version
 
-letsgo decides the archive layout and the linker flags, so it is a build input
-like the compiler. A release built by a version you did not choose is a release
-you cannot reproduce. `version: latest` is available and is the wrong default.
+The default is `latest`, because the alternative was a release of this action
+every time letsgo published one — and an action whose only change is a version
+number teaches everyone to ignore its releases.
 
-Bump the pin deliberately — Dependabot will offer it when you pin the action by
-tag.
+That default is a convenience, not a guarantee. letsgo decides the archive
+layout and the linker flags, so it is a build input exactly as the compiler is,
+and a release built by a version you did not choose is a release you cannot
+reproduce. A repository that cares about that pins the tag:
+
+```yaml
+      - uses: danielriddell21/letsgo-action@v1
+        with:
+          version: v0.8.0
+```
+
+Bump that pin deliberately. `letsgo verify` replays a release from the manifest,
+which records the version that built it, so a release stays checkable either
+way — pinning is what makes the *next* one come out the same.
 
 ## How letsgo is installed
 
