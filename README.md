@@ -73,6 +73,7 @@ changelog needs history the runner does not have.
 | `args` | `""` | Extra arguments, split on whitespace. |
 | `working-directory` | `.` | Where to run. |
 | `token` | `github.token` | The forge token letsgo publishes with. |
+| `tap-token` | `""` | The token a Homebrew formula is published with. Empty falls back to `token`. |
 
 ## Outputs
 
@@ -127,5 +128,28 @@ the workflow that knows which one your project releases with.
 
 `contents: write` is the only one a plain release needs. Add `id-token` and
 `attestations` for build provenance, and `packages: write` for a container
-image. A Homebrew tap lives in another repository, and the workflow token
-cannot write to one: that needs a PAT or an App token passed as `token`.
+image.
+
+A Homebrew tap lives in another repository, and the workflow token cannot write
+to one. That needs an App token, passed as `tap-token` rather than as `token`:
+
+```yaml
+- uses: actions/create-github-app-token@v3
+  id: tap-token
+  with:
+    app-id: ${{ vars.TAP_APP_ID }}
+    private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}
+    owner: ${{ github.repository_owner }}
+    repositories: homebrew-tap
+
+- uses: danielriddell21/letsgo-action@v1
+  with:
+    tap-token: ${{ steps.tap-token.outputs.token }}
+```
+
+Note what `repositories` does *not* list: the repository being released. Its
+own release is published with the workflow token, so the App needs no
+installation there — which also means a new repository cannot fail its first
+release for having been left out of one. Passing the App token as `token`
+instead works, and makes it a credential that can rewrite this repository's
+releases too.
