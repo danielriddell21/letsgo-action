@@ -19,8 +19,8 @@ inputs:
 
   command:
     description: >-
-      The letsgo command to run: release, plan, build, verify, diff, tag or
-      yank. Leave empty to install letsgo and run nothing.
+      The letsgo command to run: release, plan, build, verify, diff, tag,
+      promote or yank. Leave empty to install letsgo and run nothing.
     required: false
     default: release
 

@@ -55,6 +55,39 @@ changelog needs history the runner does not have.
           args: v1.3.0
 ```
 
+### Promoting a prerelease
+
+Flipping an RC from pre-release to release in the GitHub UI fires
+`release: released`. This workflow turns that into a promotion: it rebuilds
+the RC at its own commit and publishes it as the stable release.
+
+```yaml
+on:
+  release:
+    types: [released]
+
+jobs:
+  promote:
+    # released also fires for ordinary stable releases; only a prerelease tag promotes.
+    if: contains(github.event.release.tag_name, '-')
+    runs-on: ubuntu-latest
+    permissions: { contents: write, id-token: write, attestations: write }
+    steps:
+      - uses: actions/checkout@v7
+        with: { ref: '${{ github.event.release.tag_name }}', fetch-tags: true }
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod }
+      - uses: danielriddell21/letsgo-action@v1
+        with:
+          command: promote
+          args: ${{ github.event.release.tag_name }}
+```
+
+Editing the release with the default `github.token` doesn't start workflows;
+use an App token if the flip should trigger this one automatically. Either
+way a re-trigger is a no-op: promote refuses once the stable tag already
+exists.
+
 ### Installing letsgo without running it
 
 ```yaml
@@ -69,7 +102,7 @@ changelog needs history the runner does not have.
 | Input | Default | Description |
 |---|---|---|
 | `version` | `latest` | The letsgo release to install, or a tag such as `v0.8.0`. |
-| `command` | `release` | `release`, `plan`, `build`, `verify`, `diff`, `tag`, `yank`, or empty to install only. |
+| `command` | `release` | `release`, `plan`, `build`, `verify`, `diff`, `tag`, `promote`, `yank`, or empty to install only. |
 | `args` | `""` | Extra arguments, split on whitespace. |
 | `working-directory` | `.` | Where to run. |
 | `token` | `github.token` | The forge token letsgo publishes with. |
