@@ -123,6 +123,22 @@ runs:
         echo "version=${installed#letsgo }" >> "$GITHUB_OUTPUT"
         echo "$installed"
 
+    # Keyed on letsgo.mod, the file that pins plugin versions: a runner whose
+    # pins haven't changed reuses installed plugins instead of rebuilding them
+    # from source on every run. Every platform's default store path is listed
+    # since one composite action runs on all of them; actions/cache skips
+    # whichever paths don't exist on the current runner.
+    - name: Cache plugin store
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.local/share/letsgo/plugins
+          ~/Library/Application Support/letsgo/plugins
+          ~/AppData/Local/letsgo/plugins
+        key: ${{ runner.os }}-letsgo-plugins-${{ hashFiles('**/letsgo.mod') }}
+        restore-keys: |
+          ${{ runner.os }}-letsgo-plugins-
+
     - name: Run letsgo
       id: run
       if: inputs.command != ''
