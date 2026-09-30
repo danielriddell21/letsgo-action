@@ -20,7 +20,7 @@ inputs:
   command:
     description: >-
       The letsgo command to run: release, plan, build, verify, diff, tag,
-      promote or yank. Leave empty to install letsgo and run nothing.
+      promote, yank, audit, doctor or features. Leave empty to install letsgo and run nothing.
     required: false
     default: release
 
@@ -76,6 +76,13 @@ outputs:
   manifest:
     description: Path to the release manifest letsgo wrote, when it wrote one.
     value: ${{ steps.run.outputs.manifest }}
+
+  tag:
+    description: >-
+      The release's tag, including the module directory prefix for a module
+      nested in a monorepo (for example services/api/v1.2.3), when letsgo
+      wrote a manifest.
+    value: ${{ steps.run.outputs.tag }}
 
 runs:
   using: composite
@@ -175,6 +182,9 @@ runs:
         {
           echo "manifest=$manifest"
           echo "version=$version"
+          if [[ -n "$tag" ]]; then
+            echo "tag=$tag"
+          fi
           if [[ -n "$tag" ]]; then
             echo "release-url=${LETSGO_SERVER}/${LETSGO_REPOSITORY}/releases/tag/${tag}"
           fi

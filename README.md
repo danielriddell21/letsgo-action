@@ -55,6 +55,41 @@ changelog needs history the runner does not have.
           args: v1.3.0
 ```
 
+### Releasing modules in a monorepo
+
+A module nested in a repository releases from tags named `<dir>/vX.Y.Z`. Run
+the action from the module's directory and it scopes itself to that module:
+
+```yaml
+on:
+  push:
+    tags: ["*/v*"]
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [services/api, services/worker]
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: ${{ matrix.module }}/go.mod
+      - uses: danielriddell21/letsgo-action@v1
+        id: release
+        # A tag names one module; every other matrix entry finds no release
+        # of its own at this commit, so it fails and is skipped by the guard.
+        if: startsWith(github.ref_name, matrix.module)
+        with:
+          working-directory: ${{ matrix.module }}
+      - run: echo "released ${{ steps.release.outputs.tag }}"
+        if: steps.release.outputs.tag != ''
+```
+
 ### Promoting a prerelease
 
 Flipping an RC from pre-release to release in the GitHub UI fires
@@ -102,7 +137,7 @@ exists.
 | Input | Default | Description |
 |---|---|---|
 | `version` | `latest` | The letsgo release to install, or a tag such as `v0.8.0`. |
-| `command` | `release` | `release`, `plan`, `build`, `verify`, `diff`, `tag`, `promote`, `yank`, or empty to install only. |
+| `command` | `release` | `release`, `plan`, `build`, `verify`, `diff`, `tag`, `promote`, `yank`, `audit`, `doctor`, `features`, or empty to install only. |
 | `args` | `""` | Extra arguments, split on whitespace. |
 | `working-directory` | `.` | Where to run. |
 | `token` | `github.token` | The forge token letsgo publishes with. |
@@ -116,6 +151,7 @@ exists.
 | `version` | The project version that was built or published. |
 | `release-url` | The release page, when a release was published. |
 | `manifest` | Path to the `letsgo.json` letsgo wrote. |
+| `tag` | The release's tag, with the module directory prefix for a nested module (`services/api/v1.2.3`). |
 
 ```yaml
       - uses: danielriddell21/letsgo-action@v1
