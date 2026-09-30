@@ -46,6 +46,54 @@ changelog needs history the runner does not have.
           args: --explain
 ```
 
+### Approving a release before it publishes
+
+`plan` reads the forge and saves what a release would change; `apply`
+publishes exactly that and nothing else. Put an
+[environment](https://docs.github.com/actions/deployment/targeting-different-environments)
+with required reviewers between them and the reviewer approves the plan
+itself, shown in the job summary:
+
+```yaml
+on:
+  push:
+    tags: ["v*"]
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    permissions: { contents: read }
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod }
+      - uses: danielriddell21/letsgo-action@v1
+        with: { command: plan }   # uploads release.plan, writes the job summary
+
+  apply:
+    needs: plan
+    environment: release          # required reviewers approve here
+    runs-on: ubuntu-latest        # a different runner from plan, on purpose
+    permissions: { contents: write, id-token: write, attestations: write, packages: write }
+    steps:
+      - uses: actions/checkout@v7
+        with: { fetch-depth: 0 }
+      - uses: actions/setup-go@v7
+        with: { go-version-file: go.mod }
+      - uses: danielriddell21/letsgo-action@v1
+        with: { command: apply }  # downloads release.plan
+```
+
+The plan job needs only read access, so the approval gate is also a privilege
+boundary. `apply` rebuilds the release and refuses to publish unless the
+rebuild is the one the plan agreed, and unless the forge is still as the plan
+found it.
+
+Give `plan` or `apply` any `args` and the action runs them as written, with no
+plan saved, uploaded or downloaded: `args: --explain` is still the two-second
+pull request check above.
+
 ### Verifying a published release
 
 ```yaml
@@ -137,9 +185,11 @@ exists.
 | Input | Default | Description |
 |---|---|---|
 | `version` | `latest` | The letsgo release to install, or a tag such as `v0.8.0`. |
-| `command` | `release` | `release`, `plan`, `build`, `verify`, `diff`, `tag`, `promote`, `yank`, `audit`, `doctor`, `features`, or empty to install only. |
+| `command` | `release` | `release`, `plan`, `apply`, `build`, `verify`, `diff`, `tag`, `promote`, `yank`, `audit`, `doctor`, `features`, or empty to install only. |
 | `args` | `""` | Extra arguments, split on whitespace. |
 | `working-directory` | `.` | Where to run. |
+| `plan-file` | `release.plan` | Where `plan` saves the plan and `apply` reads it, relative to `working-directory`. |
+| `plan-artifact` | `release.plan` | The artifact name `plan` uploads the plan under and `apply` downloads it from. |
 | `token` | `github.token` | The forge token letsgo publishes with. |
 | `tap-token` | `""` | The token a Homebrew formula is published with. Empty falls back to `token`. |
 
@@ -151,6 +201,7 @@ exists.
 | `version` | The project version that was built or published. |
 | `release-url` | The release page, when a release was published. |
 | `manifest` | Path to the `letsgo.json` letsgo wrote. |
+| `plan-file` | Path to the plan `plan` saved. |
 | `tag` | The release's tag, with the module directory prefix for a nested module (`services/api/v1.2.3`). |
 
 ```yaml

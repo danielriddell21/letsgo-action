@@ -19,8 +19,13 @@ inputs:
 
   command:
     description: >-
-      The letsgo command to run: release, plan, build, verify, diff, tag,
-      promote, yank, audit, doctor or features. Leave empty to install letsgo and run nothing.
+      The letsgo command to run: release, plan, apply, build, verify, diff,
+      tag, promote, yank, audit, doctor or features. Leave empty to install
+      letsgo and run nothing.
+
+      plan with no args saves the plan to plan-file, uploads it as the
+      plan-artifact artifact and writes it to the job summary. apply with no
+      args downloads that artifact and applies it.
     required: false
     default: release
 
@@ -33,6 +38,20 @@ inputs:
     description: The directory to run in.
     required: false
     default: .
+
+  plan-file:
+    description: >-
+      The file a saved plan is written to (plan) and read from (apply),
+      relative to working-directory.
+    required: false
+    default: release.plan
+
+  plan-artifact:
+    description: >-
+      The name the saved plan is uploaded under by plan, and downloaded from
+      by apply. Apply downloads it only when no args are given.
+    required: false
+    default: release.plan
 
   token:
     description: >-
@@ -76,6 +95,10 @@ outputs:
   manifest:
     description: Path to the release manifest letsgo wrote, when it wrote one.
     value: ${{ steps.run.outputs.manifest }}
+
+  plan-file:
+    description: Path to the plan letsgo saved, when command is plan and it saved one.
+    value: ${{ steps.run.outputs.plan-file }}
 
   tag:
     description: >-
@@ -146,6 +169,16 @@ runs:
         restore-keys: |
           ${{ runner.os }}-letsgo-plugins-
 
+    # The plan was made on another job, on purpose: the job that publishes is
+    # not the job that read the forge, and it runs only once the environment's
+    # reviewers have approved it.
+    - name: Download plan
+      if: inputs.command == 'apply' && inputs.args == ''
+      uses: actions/download-artifact@v4
+      with:
+        name: ${{ inputs.plan-artifact }}
+        path: ${{ runner.temp }}/letsgo-plan
+
     - name: Run letsgo
       id: run
       if: inputs.command != ''
@@ -156,15 +189,52 @@ runs:
         LETSGO_TAP_TOKEN: ${{ inputs.tap-token }}
         LETSGO_COMMAND: ${{ inputs.command }}
         LETSGO_ARGS: ${{ inputs.args }}
+        LETSGO_PLAN_FILE: ${{ inputs.plan-file }}
+        LETSGO_PLAN_DIR: ${{ runner.temp }}/letsgo-plan
         LETSGO_REPOSITORY: ${{ github.repository }}
         LETSGO_SERVER: ${{ github.server_url }}
       run: |
         set -euo pipefail
 
-        # Deliberately unquoted: args is a whitespace-separated list, which is
-        # the only shape an action input can carry.
-        # shellcheck disable=SC2086
-        letsgo "$LETSGO_COMMAND" $LETSGO_ARGS
+        # Split on whitespace, which is the only shape an action input can
+        # carry; read -a does not expand globs the way an unquoted word would.
+        read -r -a args <<< "$LETSGO_ARGS"
+
+        # A bare plan or apply is the approval pipeline: plan saves what it
+        # would do, apply does exactly that. Any args at all mean the workflow
+        # is running the command its own way, and nothing is added.
+        plan_file=""
+        if [[ ${#args[@]} -eq 0 ]]; then
+          case "$LETSGO_COMMAND" in
+            plan)
+              plan_file="$PWD/$LETSGO_PLAN_FILE"
+              args=(-out "$plan_file")
+              ;;
+            apply) args=("$LETSGO_PLAN_DIR/$(basename "$LETSGO_PLAN_FILE")") ;;
+          esac
+        fi
+
+        if [[ -n "$plan_file" ]]; then
+          # The plan is what the reviewer approves, so it goes in the summary
+          # whether or not the plan succeeded.
+          status=0
+          out="$(mktemp)"
+          letsgo plan "${args[@]}" 2>&1 | tee "$out" || status=$?
+          {
+            echo "## letsgo plan"
+            echo '```'
+            cat "$out"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          if [[ $status -ne 0 ]]; then
+            exit "$status"
+          fi
+          if [[ -f "$plan_file" ]]; then
+            echo "plan-file=$plan_file" >> "$GITHUB_OUTPUT"
+          fi
+        else
+          letsgo "$LETSGO_COMMAND" "${args[@]}"
+        fi
 
         # Outputs come from the manifest rather than from parsing stdout: it is
         # the file letsgo writes precisely so that machines do not have to read
@@ -189,3 +259,12 @@ runs:
             echo "release-url=${LETSGO_SERVER}/${LETSGO_REPOSITORY}/releases/tag/${tag}"
           fi
         } >> "$GITHUB_OUTPUT"
+
+    - name: Upload plan
+      if: inputs.command == 'plan' && steps.run.outputs.plan-file != ''
+      uses: actions/upload-artifact@v4
+      with:
+        name: ${{ inputs.plan-artifact }}
+        path: ${{ steps.run.outputs.plan-file }}
+        if-no-files-found: error
+        retention-days: 7
