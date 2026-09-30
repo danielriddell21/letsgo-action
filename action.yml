@@ -216,16 +216,18 @@ runs:
 
         if [[ -n "$plan_file" ]]; then
           # The plan is what the reviewer approves, so it goes in the summary
-          # whether or not the plan succeeded.
+          # whether or not the plan succeeded. letsgo renders the summary
+          # itself, on stdout; everything else it says stays on stderr, in the
+          # job log.
           status=0
           out="$(mktemp)"
-          letsgo plan "${args[@]}" 2>&1 | tee "$out" || status=$?
-          {
-            echo "## letsgo plan"
-            echo '```'
-            cat "$out"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          letsgo plan --format md "${args[@]}" > "$out" || status=$?
+          if [[ -s "$out" ]]; then
+            cat "$out" >> "$GITHUB_STEP_SUMMARY"
+          else
+            # A plan that fails its gates has no diff to render.
+            printf '## letsgo plan\n\nThe plan did not complete; see the job log.\n' >> "$GITHUB_STEP_SUMMARY"
+          fi
           if [[ $status -ne 0 ]]; then
             exit "$status"
           fi
