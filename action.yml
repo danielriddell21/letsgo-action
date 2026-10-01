@@ -149,22 +149,37 @@ runs:
         bin="$(go env GOPATH)/bin"
         echo "$bin" >> "$GITHUB_PATH"
 
-        installed="$("$bin/letsgo" version)"
-        echo "version=${installed#letsgo }" >> "$GITHUB_OUTPUT"
-        echo "$installed"
+        # version --json is the machine form; an older letsgo has only the
+        # text one, so fall back to reading that.
+        if installed="$("$bin/letsgo" version --json 2>/dev/null)" && [[ -n "$installed" ]]; then
+          installed="$(jq -r '.version' <<< "$installed")"
+        else
+          installed="$("$bin/letsgo" version)"
+          installed="${installed#letsgo }"
+        fi
+        echo "version=$installed" >> "$GITHUB_OUTPUT"
+        echo "letsgo $installed"
+
+        # Where the plugin store is, as letsgo resolves it, so the cache
+        # below follows XDG_DATA_HOME and the global config. An older letsgo
+        # cannot say, and gets the default location for the platform.
+        if ! plugins="$("$bin/letsgo" plugin dir 2>/dev/null)" || [[ -z "$plugins" ]]; then
+          case "$RUNNER_OS" in
+            macOS) plugins="$HOME/Library/Application Support/letsgo/plugins" ;;
+            Windows) plugins="${LOCALAPPDATA:-$HOME/AppData/Local}/letsgo/plugins" ;;
+            *) plugins="${XDG_DATA_HOME:-$HOME/.local/share}/letsgo/plugins" ;;
+          esac
+        fi
+        echo "plugins=$plugins" >> "$GITHUB_OUTPUT"
 
     # Keyed on letsgo.mod, the file that pins plugin versions: a runner whose
     # pins haven't changed reuses installed plugins instead of rebuilding them
-    # from source on every run. Every platform's default store path is listed
-    # since one composite action runs on all of them; actions/cache skips
-    # whichever paths don't exist on the current runner.
+    # from source on every run. The path is the one the installed letsgo
+    # reports, not a guess per platform.
     - name: Cache plugin store
       uses: actions/cache@v4
       with:
-        path: |
-          ~/.local/share/letsgo/plugins
-          ~/Library/Application Support/letsgo/plugins
-          ~/AppData/Local/letsgo/plugins
+        path: ${{ steps.install.outputs.plugins }}
         key: ${{ runner.os }}-letsgo-plugins-${{ hashFiles('**/letsgo.mod') }}
         restore-keys: |
           ${{ runner.os }}-letsgo-plugins-
@@ -243,7 +258,9 @@ runs:
         # the part meant for people.
         # head rather than -quit: BSD find and GNU find disagree about the
         # latter, and this runs on whichever the runner has.
-        manifest="$(find . -maxdepth 3 -name letsgo.json 2>/dev/null | head -n 1 || true)"
+        # The newest one, so a stale manifest from an earlier run in the same
+        # checkout is not reported in place of the one just written.
+        manifest="$(find . -maxdepth 3 -name letsgo.json -exec ls -t {} + 2>/dev/null | head -n 1 || true)"
         if [[ -z "$manifest" ]]; then
           exit 0
         fi
@@ -258,7 +275,10 @@ runs:
             echo "tag=$tag"
           fi
           if [[ -n "$tag" ]]; then
-            echo "release-url=${LETSGO_SERVER}/${LETSGO_REPOSITORY}/releases/tag/${tag}"
+            # A monorepo tag carries slashes, which stay; anything else a tag
+            # can hold is escaped.
+            escaped="$(jq -rn --arg t "$tag" '$t | split("/") | map(@uri) | join("/")')"
+            echo "release-url=${LETSGO_SERVER}/${LETSGO_REPOSITORY}/releases/tag/${escaped}"
           fi
         } >> "$GITHUB_OUTPUT"
 
