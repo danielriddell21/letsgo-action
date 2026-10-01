@@ -151,8 +151,10 @@ runs:
 
         # version --json is the machine form; an older letsgo has only the
         # text one, so fall back to reading that.
-        if installed="$("$bin/letsgo" version --json 2>/dev/null)" && [[ -n "$installed" ]]; then
-          installed="$(jq -r '.version' <<< "$installed")"
+        # An older letsgo ignores the flag and prints the text form, so what
+        # comes back has to parse before it is believed.
+        if installed="$("$bin/letsgo" version --json 2>/dev/null)" && installed="$(jq -er '.version' <<< "$installed" 2>/dev/null)"; then
+          :
         else
           installed="$("$bin/letsgo" version)"
           installed="${installed#letsgo }"
