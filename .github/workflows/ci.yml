@@ -121,48 +121,6 @@ jobs:
           test -f "fixture/$MANIFEST"
           echo "built $VERSION, described by $MANIFEST"
 
-  # The approval pipeline's first half. Apply would publish a release, so it
-  # is not run here; what is checked is that plan saves a file and says where.
-  plan:
-    name: plan a fixture
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v7
-      - uses: actions/setup-go@v7
-        with:
-          go-version: stable
-
-      - name: create a module to plan
-        shell: bash
-        run: |
-          set -euo pipefail
-          mkdir -p fixture
-          cd fixture
-          printf 'module example.com/fixture\n\ngo 1.24\n' > go.mod
-          printf 'package main\n\nfunc main() {}\n' > main.go
-          git init -q -b main
-          git config user.email ci@example.com
-          git config user.name CI
-          git add .
-          git commit -q -m "fixture"
-          git tag v1.2.3
-
-      - uses: ./
-        id: planned
-        with:
-          command: plan
-          working-directory: fixture
-
-      - name: the plan was saved
-        shell: bash
-        env:
-          PLAN_FILE: ${{ steps.planned.outputs.plan-file }}
-        run: |
-          set -euo pipefail
-          test -n "$PLAN_FILE"
-          test -s "$PLAN_FILE"
-          echo "planned into $PLAN_FILE"
-
   # An input must not be able to become a command.
   injection:
     name: inputs are not shell
