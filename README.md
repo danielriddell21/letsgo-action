@@ -32,6 +32,12 @@ jobs:
       - uses: danielriddell21/letsgo-action@v1
 ```
 
+Plugins pinned in `letsgo.mod` are installed before the command runs, so a
+workflow never names them. A cask is the `letsgo-cask` plugin pinned on the
+`tap-files` hook, with its settings in `letsgo-cask.mod`; for a tap, pass
+`tap-app-id: ${{ vars.TAP_APP_ID }}` and
+`tap-app-private-key: ${{ secrets.TAP_APP_PRIVATE_KEY }}`.
+
 A shallow clone is fine. letsgo falls back to the GitHub compare API when the
 changelog needs history the runner does not have.
 
@@ -64,6 +70,9 @@ prerelease from the GitHub UI.
 | `plan-artifact` | `release.plan` | The artifact name `plan` uploads the plan under and `apply` downloads it from. |
 | `token` | `github.token` | The forge token letsgo publishes with. |
 | `tap-token` | `""` | The token a Homebrew formula is published with. Empty falls back to `token`. |
+| `tap-app-id` / `tap-app-private-key` | `""` | A GitHub App that can write to the tap. Mints a token scoped to the tap alone and uses it as `tap-token`. |
+| `tap-repository` | `homebrew-tap` | The tap the App token is scoped to. |
+| `attest` | `false` | Attest provenance for the `dist/` archives. Needs `id-token: write` and `attestations: write`. |
 
 ## Outputs
 

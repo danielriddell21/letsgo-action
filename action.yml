@@ -79,6 +79,34 @@ inputs:
     required: false
     default: ""
 
+  tap-app-id:
+    description: >-
+      ID of the GitHub App that can write to the Homebrew tap. With
+      tap-app-private-key, mints an App token scoped to the tap alone and
+      uses it as tap-token. Pass vars.TAP_APP_ID.
+    required: false
+    default: ""
+
+  tap-app-private-key:
+    description: >-
+      Private key of the App named by tap-app-id. Empty mints nothing, and
+      tap-token is used as given.
+    required: false
+    default: ""
+
+  tap-repository:
+    description: The tap repository the App token is scoped to.
+    required: false
+    default: homebrew-tap
+
+  attest:
+    description: >-
+      Attest build provenance for the archives in dist/ after the command.
+      The calling job must grant id-token and attestations write, or the step
+      fails.
+    required: false
+    default: "false"
+
 outputs:
   letsgo-version:
     description: The letsgo version that ran.
@@ -186,6 +214,38 @@ runs:
         restore-keys: |
           ${{ runner.os }}-letsgo-plugins-
 
+    # Every plugin letsgo.mod pins is installed here, so a workflow names none
+    # of them: the pin is the one place a plugin is chosen. letsgo checks each
+    # against its digest before running it, so this cannot change a release.
+    - name: Install pinned plugins
+      if: inputs.command != '' && hashFiles(format('{0}/letsgo.mod', inputs.working-directory)) != ''
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        if ! pins="$(letsgo plugin list --json 2>/dev/null)"; then
+          echo "::warning::this letsgo cannot list its plugins; install them before this step"
+          exit 0
+        fi
+        jq -r '.plugins[]? | select(.ok | not) | "\(.command)@\(.version)"' <<< "$pins" |
+          while read -r plugin; do
+            letsgo plugin install "$plugin"
+          done
+
+    # A workflow token cannot write to another repository, so a tap needs an
+    # App token. It is scoped to the tap alone: the release itself is
+    # published with token, so the App need not be installed on this
+    # repository at all.
+    - name: Mint the tap token
+      id: app
+      if: inputs.tap-app-private-key != ''
+      uses: actions/create-github-app-token@v3
+      with:
+        app-id: ${{ inputs.tap-app-id }}
+        private-key: ${{ inputs.tap-app-private-key }}
+        owner: ${{ github.repository_owner }}
+        repositories: ${{ inputs.tap-repository }}
+
     # The plan was made on another job, on purpose: the job that publishes is
     # not the job that read the forge, and it runs only once the environment's
     # reviewers have approved it.
@@ -203,7 +263,7 @@ runs:
       working-directory: ${{ inputs.working-directory }}
       env:
         GITHUB_TOKEN: ${{ inputs.token }}
-        LETSGO_TAP_TOKEN: ${{ inputs.tap-token }}
+        LETSGO_TAP_TOKEN: ${{ steps.app.outputs.token || inputs.tap-token }}
         LETSGO_COMMAND: ${{ inputs.command }}
         LETSGO_ARGS: ${{ inputs.args }}
         LETSGO_PLAN_FILE: ${{ inputs.plan-file }}
@@ -292,3 +352,13 @@ runs:
         path: ${{ steps.run.outputs.plan-file }}
         if-no-files-found: error
         retention-days: 7
+
+    # Records which workflow built these bytes. Keyed by digest, so it covers
+    # the copies already attached to the release.
+    - name: Attest provenance
+      if: inputs.attest == 'true'
+      uses: actions/attest-build-provenance@v4
+      with:
+        subject-path: |
+          ${{ inputs.working-directory }}/dist/*.tar.gz
+          ${{ inputs.working-directory }}/dist/*.zip
