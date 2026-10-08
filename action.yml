@@ -14,6 +14,9 @@ inputs:
       its own every time letsgo publishes one. Pin it to a tag when the
       release has to be reproducible: letsgo decides the archive layout and
       the linker flags, so it is a build input exactly as the compiler is.
+
+      "local" builds ./cmd/letsgo from the checkout in working-directory
+      instead, for letsgo releasing itself with the source being released.
     required: false
     default: latest
 
@@ -160,11 +163,12 @@ runs:
         # inside it: an interpolated input is a shell injection waiting for
         # someone to name a branch after one.
         LETSGO_VERSION: ${{ inputs.version }}
+        LETSGO_DIR: ${{ inputs.working-directory }}
       run: |
         set -euo pipefail
 
-        if [[ ! "$LETSGO_VERSION" =~ ^(latest|v[0-9]+\.[0-9]+\.[0-9]+([-+].*)?)$ ]]; then
-          echo "::error::version must be \"latest\" or a tag such as v0.8.0, got \"$LETSGO_VERSION\"" >&2
+        if [[ ! "$LETSGO_VERSION" =~ ^(latest|local|v[0-9]+\.[0-9]+\.[0-9]+([-+].*)?)$ ]]; then
+          echo "::error::version must be \"latest\", \"local\" or a tag such as v0.8.0, got \"$LETSGO_VERSION\"" >&2
           exit 1
         fi
 
@@ -172,7 +176,11 @@ runs:
         # checks what it fetches against the public checksum database, which
         # is a stronger guarantee than any digest this action could carry, and
         # it works on every runner without a platform matrix.
-        GOFLAGS=-mod=mod go install "github.com/danielriddell21/letsgo/cmd/letsgo@${LETSGO_VERSION}"
+        if [[ "$LETSGO_VERSION" == local ]]; then
+          (cd "$LETSGO_DIR" && go install ./cmd/letsgo)
+        else
+          GOFLAGS=-mod=mod go install "github.com/danielriddell21/letsgo/cmd/letsgo@${LETSGO_VERSION}"
+        fi
 
         bin="$(go env GOPATH)/bin"
         echo "$bin" >> "$GITHUB_PATH"
@@ -245,6 +253,21 @@ runs:
         private-key: ${{ inputs.tap-app-private-key }}
         owner: ${{ github.repository_owner }}
         repositories: ${{ inputs.tap-repository }}
+
+    # tag and promote both create an annotated tag, which records a tagger.
+    # A runner has no git identity, so the tag is credited to letsgo-champ,
+    # the App every other release-time write already uses, unless the
+    # workflow chose an identity of its own.
+    - name: Set a git identity
+      if: inputs.command == 'tag' || inputs.command == 'promote'
+      shell: bash
+      working-directory: ${{ inputs.working-directory }}
+      run: |
+        set -euo pipefail
+        if ! git config user.email >/dev/null; then
+          git config user.name "letsgo-champ[bot]"
+          git config user.email "293666020+letsgo-champ[bot]@users.noreply.github.com"
+        fi
 
     # The plan was made on another job, on purpose: the job that publishes is
     # not the job that read the forge, and it runs only once the environment's
@@ -359,6 +382,9 @@ runs:
       if: inputs.attest == 'true'
       uses: actions/attest-build-provenance@v4
       with:
+        # promote --work dist rebuilds into dist/build.
         subject-path: |
           ${{ inputs.working-directory }}/dist/*.tar.gz
           ${{ inputs.working-directory }}/dist/*.zip
+          ${{ inputs.working-directory }}/dist/build/*.tar.gz
+          ${{ inputs.working-directory }}/dist/build/*.zip

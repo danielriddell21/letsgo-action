@@ -47,6 +47,10 @@ changelog needs history the runner does not have.
 verifying a release, releasing modules in a monorepo, and promoting a
 prerelease from the GitHub UI.
 
+`tag` and `promote` create an annotated tag, so for those the action sets
+letsgo-champ[bot] as the git identity unless the workflow already set one.
+`promote` needs the full history: check out with `fetch-depth: 0`.
+
 [ga]: https://github.com/danielriddell21/letsgo/wiki/GitHub-Action
 
 ### Installing letsgo without running it
@@ -114,7 +118,9 @@ way — pinning is what makes the *next* one come out the same.
 
 ## How letsgo is installed
 
-`go install github.com/danielriddell21/letsgo/cmd/letsgo@<version>`.
+`go install github.com/danielriddell21/letsgo/cmd/letsgo@<version>`, or, with
+`version: local`, `go install ./cmd/letsgo` from the checkout. letsgo releases
+itself that way, with the source it is releasing.
 
 The module proxy checks what it fetches against the public checksum database,
 which is a stronger guarantee than any digest this action could carry, and it
