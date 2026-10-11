@@ -66,7 +66,7 @@ letsgo-champ[bot] as the git identity unless the workflow already set one.
 
 | Input | Default | Description |
 |---|---|---|
-| `version` | `latest` | The letsgo release to install, or a tag such as `v0.8.0`. |
+| `version` | `latest` | The letsgo release to install, or a tag such as `v1.0.0`. |
 | `command` | `release` | `release`, `plan`, `apply`, `build`, `verify`, `diff`, `tag`, `promote`, `yank`, `audit`, `doctor`, `features`, or empty to install only. |
 | `args` | `""` | Extra arguments, split on whitespace. |
 | `working-directory` | `.` | Where to run. |
@@ -101,6 +101,10 @@ The default is `latest`, because the alternative was a release of this action
 every time letsgo published one — and an action whose only change is a version
 number teaches everyone to ignore its releases.
 
+`latest` is the newest stable letsgo. From v1.0.0 that stays on the v1 line: the
+module path has no `/v2`, so a future major release would need a new path before
+`latest` could reach it.
+
 That default is a convenience, not a guarantee. letsgo decides the archive
 layout and the linker flags, so it is a build input exactly as the compiler is,
 and a release built by a version you did not choose is a release you cannot
@@ -109,7 +113,7 @@ reproduce. A repository that cares about that pins the tag:
 ```yaml
       - uses: danielriddell21/letsgo-action@v1
         with:
-          version: v0.8.0
+          version: v1.0.0
 ```
 
 Bump that pin deliberately. `letsgo verify` replays a release from the manifest,
