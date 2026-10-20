@@ -215,7 +215,7 @@ runs:
     # from source on every run. The path is the one the installed letsgo
     # reports, not a guess per platform.
     - name: Cache plugin store
-      uses: actions/cache@v4
+      uses: actions/cache@v6
       with:
         path: ${{ steps.install.outputs.plugins }}
         key: ${{ runner.os }}-letsgo-plugins-${{ hashFiles('**/letsgo.mod') }}
@@ -274,7 +274,7 @@ runs:
     # reviewers have approved it.
     - name: Download plan
       if: inputs.command == 'apply' && inputs.args == ''
-      uses: actions/download-artifact@v4
+      uses: actions/download-artifact@v8
       with:
         name: ${{ inputs.plan-artifact }}
         path: ${{ runner.temp }}/letsgo-plan
@@ -369,7 +369,7 @@ runs:
 
     - name: Upload plan
       if: inputs.command == 'plan' && steps.run.outputs.plan-file != ''
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: ${{ inputs.plan-artifact }}
         path: ${{ steps.run.outputs.plan-file }}
